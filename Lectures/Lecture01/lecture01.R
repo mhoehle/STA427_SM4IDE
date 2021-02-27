@@ -1,5 +1,6 @@
 ## ----setup, include=FALSE, cache=FALSE----------------------------------------
 #Load packages and initialize options
+library(knitr)
 opts_chunk$set(fig.path='./knitr-figs/lecture01-',echo=FALSE, cache=TRUE,results='hide', warning=FALSE, fig.width=8,fig.height=4.5,size='scriptsize',error=FALSE,tidy=FALSE)
 options(replace.assign=TRUE,width=80)
 
