@@ -195,7 +195,7 @@ p1 <- ggplot(ts_df, aes(x=Date, y=ratio_hosp_case)) + geom_line() +
 p2 <- ggplot(ts_df, aes(x=Date, y=ratio_death_hosp)) + geom_line() +
   geom_line(aes(y=ratio_death_hosp7), col="steelblue", lwd=1.2) +
   coord_cartesian(xlim=c(as.Date("2020-09-01"), NA), ylim=c(0,1)) +
-  ggtitle("Death(t) / ICU(t-7)")
+  ggtitle("Death(t) / Hosp(t-7)")
 p3 <- ggplot(ts_df, aes(x=Date, y=ratio_death_case)) + geom_line() +
   geom_line(aes(y=ratio_death_case7), col="steelblue", lwd=1.2) +
   coord_cartesian(xlim=c(as.Date("2020-09-01"), NA), ylim=c(0,0.25)) +
