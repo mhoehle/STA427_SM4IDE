@@ -31,7 +31,20 @@ options(replace.assign=TRUE,width=80)
 options(width=100)
 set.seed(123)
 library(tidyverse)
+library(lubridate)
 library(RColorBrewer)
+
+
+## -----------------------------------------------------------------------------
+# Define time varying effective reproduction number
+Ret <- function(date) ifelse(date <= as.Date("2020-03-15"), 2.5, 0.95)
+# Define generation time to use
+GT_pmf <- structure( c(0, 0.1, 0.1, 0.2, 0.2, 0.2, 0.1, 0.1), names=0:7)
+GT_obj <- R0::generation.time("empirical", val=GT_pmf)
+
+
+## ----results="all"------------------------------------------------------------
+GT_pmf
 
 
 ## ----simoutbreak, warning=FALSE-----------------------------------------------
@@ -66,12 +79,6 @@ routbreak <- function(n=100, Ret, GT_obj, initial_cases = 1) {
   return(res)
 }
 
-# Define time varying effective reproduction number
-Ret <- function(date) ifelse(date <= as.Date("2020-03-15"), 2.5, 0.95)
-# Define generation time to use
-GT_pmf <- structure( c(0, 0.1, 0.1, 0.2, 0.2, 0.2, 0.1, 0.1), names=0:7)
-GT_obj <- R0::generation.time("empirical", val=GT_pmf)
-GT_obj
 
 # Generate an outbreak (no stochasticity, just the difference equation)
 out <- routbreak(n=60, Ret=Ret, GT_obj=GT_obj)
@@ -254,4 +261,29 @@ ggplot(rt_df, aes(x=Date, y=R_hat)) +
   ylab(expression(R(t)))  +
   geom_hline(yintercept=1, lty=2, col="salmon2") +
   facet_wrap(~ method, ncol=1)
+
+
+## ----warning=FALSE, message=FALSE---------------------------------------------
+covid19_tests <- read_csv(file = file.path("Data", "data", "COVID19Test_geoRegion_all.csv")) %>%
+  filter(geoRegion == "CH") %>% rename(Date=datum)
+
+covid19_tests_long <- covid19_tests %>%
+  mutate(proportion_pos = entries_pos / entries) %>%
+  select(Date, entries, proportion_pos) %>%
+  mutate(entries7 = roll7(entries),
+         proportion_pos7 = roll7(proportion_pos)) %>%
+  pivot_longer(-Date, names_to = "type", values_to = "value") %>%
+  mutate( type2 =  case_when( type == "entries"  ~  "Total no. test",
+                              type == "entries7" ~  "Total no. test",
+                             type == "proportion_pos" ~ "Proportion positive",
+                             type == "proportion_pos7" ~ "Proportion positive"),
+          smooth7 = str_detect(type, "7"))
+
+
+ggplot(covid19_tests_long, aes(x=Date, y=value, color=smooth7)) +
+  geom_line() +
+  ylab("Proportion / No. tests") +
+  scale_color_brewer(palette="Paired") +
+  coord_cartesian(xlim=(c(ymd("2020-06-01"),NA))) + #collection doesnt start before july
+  facet_wrap(~ type2, ncol=1, scale="free_y")
 
