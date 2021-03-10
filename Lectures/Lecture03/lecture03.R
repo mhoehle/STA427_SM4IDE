@@ -211,7 +211,7 @@ p3 <- ggplot(ts_df, aes(x=Date, y=ratio_death_case)) + geom_line() +
 gridExtra::grid.arrange(p1, p2, p3, ncol=3)
 
 
-## ----warning=FALSE------------------------------------------------------------
+## ----warning=FALSE, message=FALSE---------------------------------------------
 #########################################
 ## R(t) estimation
 #########################################
@@ -249,14 +249,35 @@ rt_irt7_df <- epiestim2df(res7) %>% mutate(method = "smooth7")
 rt_irt1_df <- epiestim2df(res1) %>% mutate(method = "no smoothing")
 rt_df <- rbind(rt_irt7_df, rt_irt1_df)
 
+#Use R0 pkg
+# Define generation time to use
+GT_obj <- R0::generation.time("lognormal", val=c( 4.8, 2.3))
+
+# Use Wallinga-Teunis estimator
+ts <- out_epiestim %>% mutate(Date=row_number(), y=I)
+est <- R0::est.R0.TD(ts$y, GT_obj, begin=1L, end=nrow(ts), nsim=100)
+wt <- out_epiestim %>% rename(Date = dates) %>%
+  mutate(R_hat = est$R, lower=NA, upper=NA)
+
+#Read BAG estimate from the files
+rt_bag <- read_csv(file.path("Data","data","COVID19Re_geoRegion.csv")) %>%
+  filter(geoRegion == "CH") %>%
+  mutate(method ="smooth7", type="BAG",lower=NA, upper=NA) %>%
+  rename(Date=date, R_hat=median_R_mean) %>%
+  select(Date, R_hat, lower, upper,method, type)
+
 ## ----rtplots, warning=FALSE---------------------------------------------------
 # The plot - doesn't make too much sense because testing is substantially
 # increased in the last weeks
 # Start at 2020-03-16 so imported casesd do not play a role anymore
 ggplot(rt_df, aes(x=Date, y=R_hat)) +
   geom_ribbon(aes(ymin=lower, ymax=upper), fill="steelblue", alpha=0.2) +
-  geom_line() +
+  geom_line(aes(color="EpiEstim")) +
+  geom_line(data=rt_bag, aes(color="BAG estimate"),lty=2) +
+  #geom_line(data=wt, aes(color="Wallinga-Teunis"),lty=2) +
   xlab("Date (of report)") +
+  #scale_color_manual(values=c("BAG estimate"="#7FC97F", "EpiEstim"="#000000", "Wallinga-Teunis"="#BEAED4"), name="") +
+  scale_color_manual(values=c("BAG estimate"="#7FC97F", "EpiEstim"="#000000"), name="") +
   coord_cartesian(xlim=c(as.Date("2020-03-01"), NA), ylim=c(0, 2)) +
   ylab(expression(R(t)))  +
   geom_hline(yintercept=1, lty=2, col="salmon2") +
