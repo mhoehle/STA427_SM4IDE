@@ -171,7 +171,7 @@ legend(x="topright",c("Onset","Onset-median"),lty=1,lwd=3,col=c(1,"lightgray"))
 ##   text(i,-1,substitute(n[i],list(i=i)),cex=cex.text)
 ## }
 
-## -----------------------------------------------------------------------------
+## ----fig.width=8, fig.height=4------------------------------------------------
 cex.global <- 7
 cex.text <- 1.3
 dx <- 0.1
@@ -396,7 +396,7 @@ plotIt2 <- function(which) {
 plotIt2("4")
 
 
-## ----results='markup'---------------------------------------------------------
+## ----results='markup', size='tiny'--------------------------------------------
 #Load data from Zeger, See and Diggle (1989), Stats in Medicine on the
 #number of AIDS cases and their delay for north-east MSM
 zeger <- read.csv(file.path("Data", "zeger_etal89-tab2.csv"),sep="\t",row.names=1)
@@ -404,7 +404,7 @@ colnames(zeger) <- c(0:12)
 zeger[rev(seq_len(nrow(zeger))),]
 
 
-## ----echo=FALSE,tidy=FALSE----------------------------------------------------
+## ----echo=TRUE,tidy=FALSE, size="tiny"----------------------------------------
 #Function to convert reporting triangle matrix into data.frame
 matrix2df <- function(zeger) {
   data.frame(n=as.numeric(as.matrix(zeger)),
@@ -421,7 +421,7 @@ m <- glm( n ~ as.factor(t) + as.factor(d), data=zeger.df, subset=!is.na(n), fami
 mu.mle <- predict(m, newdata=zeger.df, type="response")
 
 
-## ----echo=FALSE,cache=TRUE,tidy=FALSE-----------------------------------------
+## ----echo=TRUE,cache=TRUE,tidy=FALSE, size="tiny"-----------------------------
 #Function to compute our target statistic
 NtInf <- function(data) {
     as.numeric(with(data, tapply(n, t, sum, na.rm=TRUE)))
