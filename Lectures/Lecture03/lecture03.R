@@ -131,16 +131,17 @@ file_name <- file.path("Data", str_c("Swiss-COVID19-Data-",Sys.Date(),  ".zip"))
 if (!file.exists(file_name)) {
   file_url <- "https://www.covid19.admin.ch/api/data/20210308-nsrvnhng/downloads/sources-csv.zip"
   download.file(url=file_url,destfile= file_name, mode="wb")
-  utils::unzip(zipfile=file_name, exdir="Data")
+  utils::unzip(zipfile=file_name, exdir=file.path("Data", str_c("BAG-",Sys.Date())))
 }
+file_path <- file.path("Data", str_c("BAG-", Sys.Date()), "data")
 # Load CSV file containing the case data for all regions
-covid19_reports <- read_csv(file = file.path("Data", "data", "COVID19Cases_geoRegion.csv")) %>%
+covid19_reports <- read_csv(file = file.path(file_path, "COVID19Cases_geoRegion.csv")) %>%
   filter(geoRegion == "CH")
 # Hospitalizations
-covid19_hosp <- read_csv(file = file.path("Data", "data", "COVID19Hosp_geoRegion.csv")) %>%
+covid19_hosp <- read_csv(file = file.path(file_path, "COVID19Hosp_geoRegion.csv")) %>%
   filter(geoRegion == "CH")
 # Deaths
-covid19_deaths <- read_csv(file = file.path("Data", "data", "COVID19Death_geoRegion.csv")) %>%
+covid19_deaths <- read_csv(file = file.path(file_path, "COVID19Death_geoRegion.csv")) %>%
   filter(geoRegion == "CH")
 
 # I'll use values from
@@ -253,18 +254,26 @@ rt_df <- rbind(rt_irt7_df, rt_irt1_df)
 # Define generation time to use
 GT_obj <- R0::generation.time("lognormal", val=c( 4.8, 2.3))
 
-# Use Wallinga-Teunis estimator
-ts <- out_epiestim %>% mutate(Date=row_number(), y=I)
-est <- R0::est.R0.TD(ts$y, GT_obj, begin=1L, end=nrow(ts), nsim=100)
-wt <- out_epiestim %>% rename(Date = dates) %>%
-  mutate(R_hat = est$R, lower=NA, upper=NA)
+# # Use Wallinga-Teunis estimator
+# ts <- out_epiestim %>% mutate(Date=row_number(), y=I)
+# est <- R0::est.R0.TD(ts$y, GT_obj, begin=1L, end=nrow(ts), nsim=100)
+# wt <- out_epiestim %>% rename(Date = dates) %>%
+#   mutate(R_hat = est$R, lower=NA, upper=NA)
 
 #Read BAG estimate from the files
-rt_bag <- read_csv(file.path("Data","data","COVID19Re_geoRegion.csv")) %>%
+rt_bag <- read_csv(file.path(file_path,"COVID19Re_geoRegion.csv")) %>%
   filter(geoRegion == "CH") %>%
   mutate(method ="smooth7", type="BAG",lower=NA, upper=NA) %>%
   rename(Date=date, R_hat=median_R_mean) %>%
   select(Date, R_hat, lower, upper,method, type)
+
+#Read Taskforce estimate described at https://sciencetaskforce.ch/en/current-situation/ and compare
+rt_taskforce <- read_csv("https://raw.githubusercontent.com/covid-19-Re/dailyRe-Data/master/CHE-confCasesSWestimates.csv") %>% filter(region == "CHE")
+rt_swiss <- left_join(rt_bag, rt_taskforce, by=c("Date"="date"))
+all.equal(rt_swiss$R_hat, rt_swiss$median_R_mean)
+tail(rt_swiss, n=25) %>% select(Date, R_hat, median_R_mean)
+rt_swiss %>% mutate(abs_diff = abs(R_hat - median_R_mean)) %>%
+  filter(abs_diff == max(abs_diff,na.rm=TRUE)) %>% select(Date, R_hat, median_R_mean, abs_diff)
 
 ## ----rtplots, warning=FALSE---------------------------------------------------
 # The plot - doesn't make too much sense because testing is substantially

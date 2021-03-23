@@ -51,6 +51,14 @@ tab <- twoby2(salk,F.lim=1e9,print=FALSE)
 (VE <- 1-RR[c(1,3,2)])
 
 
+## ----echo=TRUE,results='verbatim', size="scriptsize"--------------------------
+biontech <- t(matrix(c(8,21720,162,21728),2,2))
+dimnames(biontech) <- list(c("vacc","non-vacc"),c("case","nocase"))
+tab <- Epi::twoby2(biontech,F.lim=1e9,print=FALSE)
+RR <- tab$measures["             Relative Risk:",]
+(VE <- 1-RR[c(1,3,2)])
+
+
 ## ----echo=TRUE----------------------------------------------------------------
 N <- function( VT, VL, pi, alpha=0.05, beta=0.2) {
   (qnorm(alpha/2) + qnorm(1-beta))^2 * (1-pi*VL)^2 * (1-VT) / ( pi*(1-pi)*(VT-VL)^2)
