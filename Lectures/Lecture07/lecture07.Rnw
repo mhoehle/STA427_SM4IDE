@@ -1,0 +1,430 @@
+\documentclass[compress,10pt]{beamer}
+\usepackage{fontspec}
+
+% Biblatex like bibliography
+%\usepackage[backend=biber,natbib=true,style=numeric]{biblatex}
+\usepackage[backend=biber,natbib=true,style=chicago-authordate,maxcitenames=1,maxbibnames=9]{biblatex}
+\addbibresource{/Users/hoehle/Literature/Bibtex/jabref.bib}
+\DeclareCiteCommand{\longcite}{}{\printnames[author]{author}, \printfield{year}, \printfield{journaltitle}}{;}{}
+
+\input{../tex/header}
+\usepackage{siunitx}
+
+\title[STA427:L07 COVID-19 Outbreak Investigations]{L07 COVID-19 Outbreak Investigations\footnote{\tiny LaMo: \Sexpr{format(Sys.time(),"%Y-%m-%d @ %X")} \normalsize}}
+%
+%
+\author[M. Höhle]{Michael H\"{o}hle\inst{1}}
+%
+\institute{
+  \inst{1} Department of Mathematics, Stockholm University, Sweden\\
+  \includegraphics[width=0.3cm]{../figs/twitter} $\>$ \texttt{m\_hoehle}\\
+}
+
+\logo{\includegraphics[width=2cm]{../figs/UZH_logo}\hspace{1cm}\mbox{}}
+
+\date[]{
+  STA427 FS2021\\
+  Statistical Methods in Infectious Disease Epidemiology\\
+  Epidemiology, Biostatistics and Prevention Institute\\
+  University of Zurich, Switzerland
+}
+
+
+\begin{document}
+\setcounter{tocdepth}{2}
+<<setup, include=FALSE>>=
+#Load packages and initialize options
+opts_chunk$set(fig.path='./knitr-figs/lecture06-',echo=FALSE, cache=FALSE,results='hide', warning=FALSE, fig.width=8,fig.height=4.5,size='tiny',error=FALSE,tidy=FALSE)
+options(replace.assign=TRUE,width=80)
+@
+
+\begingroup
+\renewcommand{\insertframenumber}{}
+\setbeamertemplate{footline}{}
+\begin{frame}[noframenumbering]
+  \titlepage
+\end{frame}
+\endgroup
+
+\logo{}
+\begingroup
+\renewcommand{\insertframenumber}{}
+\setbeamertemplate{footline}{}
+\begin{frame}[noframenumbering]{Outline}
+  \tableofcontents%[hideallsubsections]
+\end{frame}
+\endgroup
+
+
+\renewenvironment{knitrout}{\setlength{\topsep}{0mm}}{}
+
+<<echo=FALSE,results='hide',message=FALSE>>=
+######################################################################
+### Author: Michael Höhle <http://www.math.su.se/~hoehle>
+### Course: Statistical Methods in Infectious Disease Epidemiology
+###         (STA427 - Spring 2021) at the
+###         Department of Biostatistics,
+###         Epidemiology, Biostatistics and Prevention Institute,
+###         University of Zurich, Switzerland
+###
+### License:
+### Slides content is licensed under a <a rel="license"
+### href="http://creativecommons.org/licenses/by-sa/4.0/">Creative Commons
+### Attribution-ShareAlike 4.0 International License</a>.
+### The code content is available under a <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPLv3</a>
+### license.
+###
+### Description:
+###  Rnw File for lecture 07
+###
+### History:
+###  -- 2021-04-10 file created
+######################################################################
+
+options(width=100)
+set.seed(123)
+library(tidyverse)
+library(lubridate)
+library(stringr)
+library(RColorBrewer)
+library(surveillance)
+@
+
+%Empty logo on all coming pages
+\logo{}
+
+%\setfootlineno
+
+% \begin{frame}
+%   \frametitle{Overview}
+%   \tableofcontents
+% \end{frame}
+
+\newcommand{\bmtheta}{\bm{\theta}}
+\newcommand{\bmeta}{\bm{\eta}}
+\newcommand{\bmY}{\bm{Y}}
+\newcommand{\bmy}{\bm{y}}
+\newcommand{\bmz}{\bm{z}}
+\newcommand{\bmx}{\bm{x}}
+\newcommand{\bmX}{\bm{X}}
+\newcommand{\bmbeta}{\bm{\beta}}
+
+\newcommand{\VE}{\operatorname{VE}}
+\renewcommand{\RR}{\operatorname{RR}}
+\newcommand{\HR}{\operatorname{HR}}
+\newcommand{\pa}{\operatorname{pa}}
+\newcommand{\ch}{\operatorname{ch}}
+\newcommand{\dso}{\operatorname{dso}}
+\newcommand{\SAR}{\operatorname{SAR}}
+
+
+\section{Outbreak Investigations}
+\subsection*{}
+
+\begin{frame}{Outbreak Investigation}
+\begin{itemize}
+\item In this course we have looked a lot at the use of statistical methods for modelling population level time series, i.e. surveillance data
+\item However, many infectious disease outbreaks are (or start as) as small localized clusters, which can be investigated by \textit{field investigations}.
+\item Aims of such an outbreak investigation\footnote{Taken from \url{https://www.cdc.gov/csels/dsepd/ss1978/lesson6/section1.html}}:
+  \begin{itemize}
+  \item Control or prevention (knowledge of agent, course of the outbreak, mode of transmission, source)
+  \item Research opportunity (mode of transmission, incubation period, clinical spectrum, ...)
+  \item Public, political, or legal concerns
+  \item Training
+  \end{itemize}
+\end{itemize}
+\end{frame}
+
+\subsection{Secondary attack rate}
+
+\begin{frame}{Secondary attack rate}
+\begin{itemize}
+\item The \textit{secondary attack rate} is an alternative morbidity measure to, e.g. incidence, and is defined as\footnote{\url{https://www.cdc.gov/csels/dsepd/ss1978/lesson3/section2.html}}
+\begin{align*}
+\SAR = \frac{\text{Number of new cases among contacts}}{\text{Total number of contacts}}
+\end{align*}
+\item Classical methods for calculating point estimate and CIs for a proportion can be used.
+\item By calculating the SAR in two groups one can even compute relative risks by classical 2x2 methods.
+\end{itemize}
+\end{frame}
+
+\section[Carnival cluster]{Example: COVID-19 Carnival cluster, Germany, Feb-Mar 2020}
+
+\begin{frame}{COVID-19 Carnival cluster (1)}
+\begin{itemize}
+\item Early COVID-19 outbreak investigation by \citet{bender_etal2021} in order to determine SAR as well as incubation period, serial interval and generation time.
+\item Important insight: There seems to be little transmission from completely asymptomatic cases
+\item SAR for household contacts of lab confirmed cases:\\[2ex]
+
+\begin{center}
+\tiny
+\begin{tabular}{llll}
+Clinical symptoms source & No. contacts infected\footnote{either tested positive or experienced respiratory symptoms} & Total no. contacts & $\SAR$ \\
+\hline
+Asymptomatic                             & 0 & 4 & 0\% \\
+Symptomatic\footnote{phase not specified or both} & 4 & 28 & 14.3\% \\
+\hline
+Total                                    & 4 & 32 & 12.5\%
+\end{tabular}
+\normalsize
+\end{center}
+
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{COVID-19 Carnival cluster (2)}
+\begin{itemize}
+\item Getting an OR estimate with CI for the SAR of asymptomatic vs. symptomatic is difficult, due to the zero in the 2x2 table
+<<make_carnival, echo=FALSE, results="markup">>=
+carnival <- bind_rows(
+    data.frame(infected=0, n= 4, cs_source="asymptomatic"),
+    data.frame(infected=4, n=28, cs_source="symptomatic")
+  ) %>%
+  mutate(across(cs_source, as.factor)) %>%
+  mutate(cs_source = relevel(cs_source, ref="asymptomatic"))
+carnival
+@
+<<glm_carnival, echo=TRUE, results="markup">>=
+m_glm <- glm( cbind(infected, n-infected) ~ 1 + cs_source, data=carnival, family=binomial )
+confint(m_glm)
+@
+\item Problem with zero can be addressed by \textit{exact logistic regression} as implemented in the \texttt{elrm} package \citep{zamar_etal2007}:
+<<elrm_carnival, results="hide", message=FALSE, echo=TRUE, cache=TRUE>>=
+#devtools::install_github(repo="https://github.com/cran/elrm.git")
+m <- elrm::elrm( infected/n ~ cs_source, interest=~cs_source, dataset=carnival, r=2, iter=1.5e4, burnIn=5e3)
+@
+<<elrm_carnival_results, echo=TRUE, results="markup">>=
+c(hat=as.numeric(exp(m$coeffs)), exp(m$coeffs.ci)) %>% unlist
+@
+\item OR estimate and CI is close to the RR estimate stated in \citet{bender_etal2021}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{COVID-19 Carnival cluster (3)}
+\begin{itemize}
+\item Score interval \citep{nam1995}:\\[2ex]
+
+<<riskscore, echo=TRUE, results="markup", cache=TRUE>>=
+PropCIs::riskscoreci(4, 28, 0, 4, conf.level=0.95)
+@
+
+\item Bayes interval with
+\begin{align*}
+\pi_i | x_i, n_i \sim \operatorname{Be}(0.5 + x_i, 0.5 + (n_i-x_i))
+\end{align*}
+posterior for each proportion $i=1,2$ and $\theta=\pi_2/\pi_1$ by sampling followed by an equitailed credibility region for $\theta$:\\[2ex]
+
+<<rrci_bayes, echo=TRUE, results="markup", cache=TRUE>>=
+PropCIs::rrci.bayes(4, 28, 0, 4, a=1/2, b=1/2, c=1/2, d=1/2, conf.level=0.95)
+@
+<<eval=FALSE>>=
+#Manual version
+X <- rbeta(1e6, 1/2 + 4, 1/2 + 28-4)
+Y <- rbeta(1e6, 1/2 + 0, 1/2 + 4)
+Z <- X/Y
+quantile(Z, prob=c(0.025, 0.975))
+@
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{COVID-19 Carnival cluster (4)}
+\begin{itemize}
+\item Same for other contacts of lab confirmed cases\\[2ex]
+
+\begin{center}
+\tiny
+\begin{tabular}{llll}
+Clinical symptoms source & No. contacts infected\footnote{either tested positive or experienced respiratory symptoms} & Total no. contacts & $\SAR$ \\
+\hline
+Asymptomatic cases &                                  0 &  22 & 0\% \\
+Symptomatic\footnote{phase not specified or both} &   3 &  25 & 12.0\% \\
+Symptomatic, presymptomatic phase only &             15 &  72 & 20.8\% \\
+Symptomatic, symptomatic phase only &                 2 &  29 &  6.9\% \\
+\hline
+Total &                                              20 & 148 & 13.5\%
+\end{tabular}
+\normalsize
+\end{center}
+\item ORs vs. asymptomatic from exact logistic regression:
+<<make_carnival_oc>>=
+carnival_oc <- bind_rows(
+    data.frame(infected=0, n=22, cs_source="asymptomatic"),
+    data.frame(infected=3, n=25, cs_source="symptomatic_phaseunknown_or_both"),
+    data.frame(infected=15, n=72, cs_source="symptomatic_presymptomatic_only"),
+    data.frame(infected=2, n=29, cs_source="symptomatic_symptomatic_only"),
+  ) %>%
+  mutate(across(cs_source, as.factor)) %>%
+  mutate(cs_source = relevel(cs_source, ref="asymptomatic"))
+@
+
+<<elrm_oc, cache=TRUE, results="hide", message=FALSE, warning=FALSE>>=
+m_oc <- elrm::elrm( infected/n ~ cs_source, interest=~cs_source, dataset=carnival_oc, r=2, iter=1.5e6, burnIn=1e4)
+@
+\tiny
+<<elrm_oc_results, results="asis">>=
+tab <- cbind(hat=as.numeric(exp(m_oc$coeffs)[-1]), exp(m_oc$coeffs.ci))
+tab <- tab %>% mutate(`Clinical symptoms source` = str_replace_all(names(tab), "cs_source", "")) %>%
+  as_tibble() %>%
+  select(`Clinical symptoms source`, everything()) %>%
+  mutate(upper = str_replace(upper, "Inf", "$\\\\infty$"))
+xtable::xtable(tab) %>% print(include.rownames=FALSE, sanitize.text.function=function(x) x)
+@
+\normalsize
+\end{itemize}
+\end{frame}
+
+\section{Transmission Graphs}
+\subsection*{}
+
+\begin{frame}{Transmission Graph(s)}
+\begin{center}
+\includegraphics[width=8cm]{figs/transmission_graph.png}
+\end{center}
+\end{frame}
+
+\begin{frame}{Graph Notation (1)}
+\begin{itemize}
+\item We describe the outbreak for the $n$ individuals by the transmission tree $T=(V,E)$. By $v\in V$ with $|V|=n$ denote the nodes of the directed graph and $E$ denotes the set of directed edges.
+\item For a node $v$ let $\operatorname{pa}(v)$ and $\operatorname{ch}(v)$ denote the set of parents and children, respectively. Since $T$ is a tree $|\pa(v)|=1$ for any $v$ except for root nodes, which are nodes with $\pa(v)=\emptyset$.
+\item Assuming the outbreak is observed until its end, the average number of secondary cases a primary cases generates is
+\begin{align*}
+\frac{1}{|V|} \sum_{v\in V} |\ch(v)|.
+\end{align*}
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Graph Notation (2)}
+\begin{itemize}
+\item Let $\dso(v)$ denote the day of symptom onset of $v\in V$ and let $p_v$ denote $v$'s parent in $T$. The empirical distribution of the serial interval time is formed by the values $\dso(v) - \dso(p_v)$, for all $v$ nodes in the set of nodes with known source, i.e.
+\begin{align*}
+V_p = \{ v \in V : |\pa(v)| = 1\}.
+\end{align*}
+\item Let $e(v)$ be the time of exposure of $v\in V$. The empirical \textit{generation time distribution} is formed by the values $t(v) - e(p_v)$, for all nodes $v\in V_p$.
+\item The empirical \textit{incubation period distribution} is given by the values $\dso(v) - e(v)$ for all $v\in V$.
+\end{itemize}
+\end{frame}
+
+\subsection{Interval Censoring}
+
+\begin{frame}{Interval Censoring (1)}
+\begin{itemize}
+\item As noted by \citet{reich_etal2009} the exact timing of exposition or symptom onset are not always given $\rightarrow$ doubly interval censored data
+% \item As before, if $t(v)$ and $\dso(v)$ are the true times of the infecting exposure and symptom onset for a given individual $v$, then $T(v)=\dso(v)-e(v)$ is the true incubation period.
+\item If instead the time of exposure and the onset of symptoms are only known to fall within a finite interval, then a typical observation for an infector-infectee pair consist of
+\begin{align*}
+X(v) =(e(v)_L, e(v)_R, \dso(v)_L, \dso(v)_R).
+\end{align*}
+\item Illustration:
+\begin{center}
+\includegraphics[width=8cm]{figs/double_censored.png}
+\end{center}
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Interval Censoring (2)}
+\begin{itemize}
+\item We follow the approach by \citet{reich_etal2009}.
+\item Let the incubation period $T$ be a non-negative continuous random variable with PDF $f_\theta(t)$ and let $h_\lambda(e)$ be the PDF of the infecting exposure time E, (in calendar time) and let $g(s)$ to be the PDF of the DSO (in calendar time).
+\item Assume $E$ to be independent of the incubation period $T$.
+\item We have that
+\begin{align*}
+ g(s|e)= f_\theta(s−e|e)= f_\theta(s−e).
+\end{align*}
+\item The joint PDF of $E$ and the $\dso$ is given by
+\begin{align*}
+p(e,s)= p(e)p(s|e)=h_\lambda(e)g(s|e)=h_\lambda(e) f_\theta(s−e).
+\end{align*}
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Interval Censoring (3)}
+\begin{itemize}
+\item The likelihood for a single doubly interval-censored observation is therefore
+\begin{align*}
+L(\theta,\lambda; X) &= \int_{E_L}^{E_R} \int_{\dso_L}^{\dso_R} h_\lambda(e) f_\theta(s−e) ds\> de.
+\end{align*}
+\item Typically, a parametric accelerated failure time model is used to model the incubation period, e.g., a Log-Normal distribution.
+\item An implementation of this approach exists in the R package \texttt{coarseDataTools} \citep{coarseDataTools}
+\item Can extend the modelling of interval censored data with covariates such as age or sex \citep{werber_etal2013}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Interval Censoring (4)}
+<<test_coarstedatatools, echo=TRUE, results="markup">>=
+# Simple dataset with 3 individuals
+# type: 0 = doubly interval censored, 1=single interval censored, 2=exact
+dat <- data.frame(EL = c(1,2,3), ER=c(2,3,3), SL=c(10,4,9), SR=c(12,7,9), type=c(0,0,2))
+
+# Fit log-normal distribution to the data
+coarseDataTools::dic.fit(dat=dat, dist="L")
+@
+\end{frame}
+
+\subsection{Multiple trees}
+
+\begin{frame}{Multiple trees (1)}
+\begin{itemize}
+\item As seen from the transmission tree, it is not always 100\% clear who infected who. Instead, up to 3 potential sources could be specified for each case.
+\item Let $|\pa(v)|\geq 1$, $v\in V_p$, denote the set of possible sources in the graph representing transmissions.
+\item A transmission tree $T$ can again be obtained by selecting one distinct parent node $v_p$ for each node $v$ with $|\pa(v)|>1$.
+\item Let $\mathcal{T}$ denote the set of possible transmission trees, i.e.
+\begin{align*}
+|\mathcal{T}| = \prod_{v\in V_p} |\pa(v)|.
+\end{align*}
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Multiple trees (2)}
+\begin{itemize}
+\item Simple way to average estimation of incubation period, serial interval and generation time over all possible trees:
+\begin{itemize}
+\item Non-parametric case: for each $T\in \mathcal{T}$ compute the empirical distribution based on the $n$ cases and compute quantiles, mean, etc. based on the set of $n\times |\mathcal{T}|$ values
+\item Parametric case: for each $T\in \mathcal{T}$ draw  $k$ samples from the respective estimated parametric distribution and compute quantiles, mean, etc. based on the set of $k\times |\mathcal{T}|$ values
+\end{itemize}
+\item Note: The above averaging approach weighs each $T\in \mathcal{T}$ equally. In principle some trees are more plausible than others $\rightarrow$ Likelihood or Bayesian framework for data augmentation
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Results}
+\begin{itemize}
+\item Results from \citet{bender_etal2021} for serial interval (non-parametric), generation time (parametric) and incubation period (parametric)
+\item A pre-processing step was applied to symptomatic cases filtering out possible sources if they did not meet within 2 days before DSO or 10 days after DSO.
+\item Results averaged over the 144 possible transmission trees:\\[2ex]
+\scriptsize
+\begin{tabular}{lSSllllll}
+     & \multicolumn{8}{c}{Quantiles} \\
+Time & \multicolumn{1}{c}{1\%} & \multicolumn{1}{c}{5\%} & 25\% & 50\% & 75\% & 95\% & 99\% & Mean \\
+\hline
+Serial interval (d)   & −2.0 & −1.0 & 1.0 & 3.0 & 6.0 & 15.0 & 22.0 & 4.5 \\
+Generation time (d)   & 0.1  & 0.3  & 1.7 & 3.6 & 6.6 & 13.1 & 21.6 & 4.9 \\
+Incubation period (d) & 0.3  & 0.8  & 2.5 & 4.3 & 6.5 & 10.6 & 14.3 & 4.8 \\
+\hline
+\end{tabular}
+\normalsize
+\mbox{}\\[2ex]
+\item Note: The serial interval is rather short an can actually be negative. Shows why COVID-19 is hard to control.
+\end{itemize}
+\end{frame}
+
+\section{Discussion}
+
+\begin{frame}{Discussion}
+\begin{itemize}
+\item Outbreak investigations are an important tool in the epidemiological toolbox, requires shoe-and-leather epidemiology
+\item Proper statistical methods as well as software toolboxes, e.g. in the form of R-packages, are needed more than ever! \citep{hoehle2017b}
+\item For an overview of COVID-19 outbreak investigations in Germany see, e.g., \citet{alpers_etal2021} (in German)
+\item Other important COVID-19 investigations are, e.g., \citet{rothe_etal2020}, \citet{russell_etal2020}, \citet{yamagishi_etal2020} and \citet{murphy_etal2020}.
+\end{itemize}
+\end{frame}
+
+\renewcommand{\newblock}{}
+\begin{frame}[allowframebreaks]{Literature}
+  %\linespread{1.2}
+  \tiny
+  %\scriptsize
+  \printbibliography
+\end{frame}
+
+
+\end{document}
+
