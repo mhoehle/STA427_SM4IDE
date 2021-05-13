@@ -1,0 +1,252 @@
+\documentclass[a4paper, 12pt]{scrartcl}
+
+\usepackage{xifthen}
+
+\newboolean{solution}
+\setboolean{solution}{true} % set to false to exclude solution
+\usepackage{comment}
+\specialcomment{solution}{\ \\ {\bfseries Solution: }}{}
+\ifthenelse{\boolean{solution}}{\excludecomment{solution}}{}
+
+\specialcomment{solution}{\ \\ {\bfseries Solution: }}{}
+\ifthenelse{\boolean{solution}}{}{\excludecomment{solution}}
+%-----------------------------------------------------------------------
+
+\usepackage{amsmath, amssymb}
+\newcommand*{\dd}{\ensuremath{\operatorname{d}\!}}
+% Fulfils ISO 80000-2 (preceeded by ISO 31-11)
+\usepackage{graphicx}
+\usepackage{natbib}
+\textwidth6.8in
+\textheight10.2in
+\topmargin0in
+\oddsidemargin-0.25in
+\evensidemargin-0.25in
+\headsep-0.25in
+\headheight0pt
+\tabcolsep0pt
+\parindent0pt
+\parskip10pt plus2pt minus1pt
+
+\pagestyle{empty}
+
+% Render code similarly to how JStatSoft does
+\newcommand{\code}[1]{%
+{\catcode`\%=12 \texttt{\detokenize{#1}}} \kern-1ex
+}
+% Additional JStatSoft-inspired bits
+\let\proglang=\textsf
+\newcommand{\pkg}[1]{{\fontseries{b}\selectfont #1}}
+
+\usepackage{enumitem}
+\usepackage{hyperref}
+
+\setlength{\parindent}{0pt}% don't indent paragraphs
+
+\begin{document}
+
+STA427 Statistical Methods for Infectious Disease Epidemiology \hfill Spring Semester 2021 \\
+\hrule
+\kern5pt
+{\bfseries
+Exercise sheet 1} \normalsize\textrm \\
+\emph{Prepare the below such that you are able to discuss it on Wednesday 3rd March}\\
+\hrule
+
+\begin{enumerate}[label = {\bfseries Exercise \arabic*}, leftmargin = *, wide = \parindent, align = left]
+\item Euler method\\[2mm]
+Euler's method to numerically solve a first order ODE of the form
+\begin{align*}
+\frac{\dd\mathbf{y}(t)}{\dd t} = \mathbf{f}(t,\mathbf{y}(t))
+\end{align*}
+given the initial condition $\mathbf{y}(t_0)=\mathbf{y}_0$ works by
+iteratively advancing from $t_n$ to $t_{n+1}=t_n+h$ by
+\begin{align*}
+\mathbf{y}_{t_{n+1}} = \mathbf{y}_{t_n} + h\cdot \mathbf{f}(t_n,\mathbf{y}_{t_n}),
+\end{align*}
+where $h>0$ is the step-length of the method.
+
+\begin{enumerate}[label = \alph*), wide = 0pt]
+\item Implement the SIR model in \proglang{R} with a function which takes inputs: a vector $(s(t),i(t))'$ and parameter vector $\mathbf{\theta}=(\beta,\gamma)'$. The function should compute and return the derivative $(\dd s(t)/\dd t, \dd i(t)/\dd t)'$.
+\begin{center}
+\code{sir_f <- function(sit, theta)}
+\end{center}
+\begin{solution}
+<<>>=
+sir_f <- function(sit, theta) {
+  # Grab the relevant parts of the input vectors
+  beta <- theta[1]
+  gamma <- theta[2]
+  S <- sit[1]
+  I <- sit[2]
+  # Return two-dimensional vector with derivatives
+  return(c(- beta * S * I, beta * S * I - gamma * I))
+}
+@
+\end{solution}
+\item Implement Euler's method to numerically solve the SIR ODE system as an \proglang{R} function. The function should take as inputs: a vector containing a grid of time values with the first element corresponding to $t_0=0$ and fixed distance $h$ between two consecutive elements and a vector of length two containing $(s(t_0),i(t_0))'$, as well as the parameter vector $\mathbf{\theta}=(\beta,\gamma)'$.
+\begin{center}
+\code{euler_f <- function(grid, si0, theta)}
+\end{center}
+Your function should return a matrix with the grid of time values, and the solution $s(t)$ and $i(t)$ for each $t$.
+\begin{solution}
+<<>>=
+euler_f <- function(grid, si0, theta) {
+  # Empty matrix to be populated
+  si <- matrix(NA, ncol = length(si0), nrow = length(grid))
+  colnames(si) <- c("S(t)", "I(t)")
+  # First row is initial values (S(t_0), I(t_0)) as given
+  si[1, ] <- si0
+  # (Lagged) difference between two gridpoints
+  h <- diff(grid)[1]
+  # Loop by advancing by the derivative
+  for (i in 1 : (length(grid) - 1)) {
+    # NB length subtracted one since first entry given as above
+    si[i + 1, ] <- si[i, ] + h * sir_f(si[i, ], theta)
+    # Using the function from the previous question to give us
+    # the derivative at the time step
+  }
+  return(cbind("time" = grid, si))
+}
+@
+\end{solution}
+\item Use Euler's method to solve the SIR ODE with $(s(0), i(0))' = (99, 1)'$ and $\mathbf{\theta} = (0.1, 0.1)$ on $[0, 50]$. Try steps of different sizes; $h\in\{1, 0.1, 0.01\}$. Which effect does $h$ appear to have? \\~({\itshape Hint}: A graphical representation may help visualise what is going on)
+\begin{solution}
+<<fig.height = 4>>=
+par(mfrow = c(1, 3))
+grid <- seq(1, 50, by = 0.001)
+res <- euler_f(grid, si0 = c(99, 1), theta = c(beta = 0.1, gamma = 0.1))
+plot(grid, res[, "I(t)"], type = "b", xlab = "time", ylab = "I(t)",
+     ylim = c(0, 100), main = paste("h =", unique(diff(grid))[1]))
+grid <- seq(1, 50, by = 0.01)
+res <- euler_f(grid, si0 = c(99, 1), theta = c(beta = 0.1, gamma = 0.1))
+plot(grid, res[, "I(t)"], type = "b", xlab = "time", ylab = "I(t)",
+     ylim = c(0, 100), main = paste("h =", unique(diff(grid))[1]))
+grid <- seq(1, 50, by = 0.1)
+res <- euler_f(grid, si0 = c(99, 1), theta = c(beta = 0.1, gamma = 0.1))
+plot(grid, res[, "I(t)"], type = "b", xlab = "time", ylab = "I(t)",
+     ylim = c(0, 100), main = paste("h =", unique(diff(grid))[1]))
+@
+We see that the step-length $h$ determines how far apart the points are. Alternatively, the inner workings of the \code{loop} in \code{euler_f} could have been implemented using (here illustrated for step-length $h = 0.1$)
+<<fig.height = 4, fig.width = 4>>=
+# Step width of the Euler method
+h <- 0.1
+beta <- gamma <- 0.1
+y <- matrix(NA, nrow = ceiling(50 / h), # Time frame is [0, 50]
+            ncol = 3,
+            dimnames = list(NULL, c("t","S","I")))
+# Initial value
+y[1, ] <- c(0, 99, 1)
+# Loop
+for (i in 2 : nrow(y)){ # Looping from time t = 1
+  y[i, ] <- c(y[i - 1, "t"] + h, y[i - 1, c("S", "I")] +
+                h * sir_f(sit = y[i - 1, c("S", "I")],
+                          theta = c(beta, gamma)))
+}
+# Show Euler solve
+plot(y[, "t"], y[, "I"], type = "l", xlab = "time", ylab = "I(t)",
+     main = paste("h =", h))
+@
+\end{solution}
+\item Load the \proglang{R} package \pkg{deSolve} and read the documentation of the \code{lsoda} function.
+\begin{solution}
+<<>>=
+#install.packages("deSolve")
+library(deSolve)
+?lsoda
+@
+Note that \code{lsoda} says the input \code{func} requires a list: ``The return value of \code{func} should be a list, whose first element is a vector containing the derivatives of \code{y} with respect to time, and whose next elements are global values that are required at each point in \code{times}. The derivatives must be specified in the same order as the state variables \code{y}.''
+\end{solution}
+\item Write \proglang{R} code which applies \texttt{lsoda} to numerically solve the simple SIR model and compare the solution with your Euler method (input parameters are: $(s(0), i(0))' = (99, 1)'$ and $\mathbf{\theta} = (0.1, 0.1)$)
+\begin{center}
+\code{sir_l <- function(t, y, parms)}
+\end{center}
+({\itshape Hint}: A graphical representation may help visualise what is going on)
+\begin{solution}
+Note the similarity of \code{sir_l} with the \code{sir_f} function but also note the additional argument \code{t}. Recall from the previous question that this is required for the \code{func} input of the \code{lsoda} ODE solver.\\~({\itshape Hint}: A graphical representation may help visualise the results)
+<<fig.height = 4>>=
+# SIR model implemented as required for lsoda
+sir_l <- function(t, y, parms) {
+  beta <- parms[1]
+  gamma <- parms[2]
+  S <- y[1]
+  I <- y[2]
+  # Returns a list rather than a vector -- difference compared to sir_f
+  return(list(c(S = - beta * S * I, I = beta * S * I - gamma * I)))
+}
+# Function inputs
+beta <- 0.1
+gamma <- 0.1
+grid <- seq(0, 50, by = 0.01)
+# Our Euler function
+res <- euler_f(grid, si0 = c(99, 1), theta = c(beta, gamma))
+# Lsoda
+res2 <- lsoda(y = c(99, 1), times = grid, func = sir_l,
+              parms = c(beta, gamma))
+
+# Plots of the two
+par(mfrow = c(1, 2))
+matplot(grid, cbind(res[, "S(t)"], res2[, 2]), type = "l",
+        ylim = c(0, 99), 
+        lwd = c(1, 3), xlab = "t",
+        ylab = "S(t)")
+legend("topright", c("Euler", "lsoda"), col = 1 : 2, lwd = c(1, 3))
+matplot(grid, cbind(res[, "I(t)"], res2[, 3]), type = "l",
+        ylim = c(0, 99), 
+        lwd = c(1, 3), xlab = "t",
+        ylab = "I(t)")
+@
+We see that our Euler implementation and the numerical \code{lsoda} approach yield similar results. We also see that the starting values of $(s(0), i(0))' = (99, 1)'$ with $\mathbf{\theta} = (0.1, 0.1)$ leads to a set of epidemic curves with a rapid decrease in S; similarly a rapid increase in I. Alternatively, with \code{plot} and \code{lines} instead of \code{matplot}
+<<fig.height = 4, fig.width = 4>>=
+plot(y[, "t"], y[, "I"], type = "l", xlab = "time", ylab = "I(t)")
+# Add lsoda (which uses a more advanced method)
+lines(grid, lsoda(y = c(99, 1),
+                  times = grid,
+                  func = sir_l, parms = c(beta, gamma))[, 3],
+      col = 2, lwd = 3, lty = 2)
+@
+\end{solution}
+\end{enumerate}
+\item COVID-19\\[2mm]
+Read the blog post \href{https://staff.math.su.se/hoehle/blog/2020/03/16/flatteningthecurve.html}{``Flatten the COVID-19 curve''} and experiment with different containment strategies using the Shiny App located at \url{https://tinu.shinyapps.io/Flatten_the_Curve/}. Discuss the pros and cons of different strategies. Discuss limitations of the model when used to evaluate strategies.
+\begin{enumerate}[label = \alph*)]
+\item With starting values ($R_0$ = 2.25, max days = 250, sdp1 $\in[30.60]$, reduction in first period = 0.6 and reduction in second period 0.8), what happens to the Final Fraction with and without interventions when the social distance period is allowed to be longer
+\begin{solution}
+Extending the first social distance period max days to 105 (up from 60) yields no change to the fraction without (it remains at 85) but decreases the fraction with (from 68 to 52). We see that the green curve ``flattens'' when the time frame for the intervention is larger.\\~
+\begin{minipage}{0.5\textwidth}
+\includegraphics[width = \linewidth]{Screenshot from 2021-03-02 11-07-30}
+\end{minipage}\hfill
+\begin{minipage}{0.5\textwidth}
+\includegraphics[width = \linewidth]{Screenshot from 2021-03-02 11-07-49}
+\end{minipage}
+\end{solution}
+\item What happens to them if $R_0$ is increased or decreased?
+\begin{solution}
+Increasing $R_0$ from 2.25 to 2.75 produces two very steep early peaks. The final fractions are 92 without and 76 with. Both epidemics seem to have finished by some 60 days with such a high reproduction number. The intervention does not seem to do much in the first case. Decreasing $R_0$ to 1.75 instead delays the start of the peak and yields two curves which look different; the green curve (with interventions) is much wider and much less steep than the purple curve.\\~
+\begin{minipage}{0.3\textwidth}
+\includegraphics[width = \linewidth]{Screenshot from 2021-03-02 11-07-30}
+\end{minipage}\hfill
+\hfill
+\begin{minipage}{0.3\textwidth}
+\includegraphics[width = \linewidth]{Screenshot from 2021-03-02 11-08-07}
+\end{minipage}\hfill
+\begin{minipage}{0.3\textwidth}
+\includegraphics[width = \linewidth]{Screenshot from 2021-03-02 11-08-20}
+\end{minipage}
+
+\end{solution}
+\item What happens when the reductions are the same, e.g. reduction after first period and reduction after second period are both 0.5? What happens when the first is larger than the second and when the second is larger than the first?
+\begin{solution}
+The green curve flattens because the values are reduced in both instances. As discussed in the exercise session, if the reduction is the same during \emph{and} after social distancing, the length of the social distancing period does not matter.\\~
+\begin{minipage}{0.5\textwidth}
+\includegraphics[width = \linewidth]{Screenshot from 2021-03-02 11-07-30}
+\end{minipage}\hfill
+\begin{minipage}{0.5\textwidth}
+\includegraphics[width = \linewidth]{Screenshot from 2021-03-02 11-09-43}
+\end{minipage}
+\end{solution}
+\end{enumerate}
+({\itshape Hint}: Noting changes in different parameters may help, e.g. ``increasing $R_0$ and decreasing \code{sdp1} has the effect of $\ldots$, keeping model parameters fixed but increasing the time interval has the effect of $\ldots$'')\\[2ex]
+As background information you might want to read the blog post ``\href{https://medium.com/@tomaspueyo/coronavirus-the-hammer-and-the-dance-be9337092b56}{Coronavirus: The Hammer and the Dance}'' by Tomas Pueyo.
+\end{enumerate}
+\end{document}

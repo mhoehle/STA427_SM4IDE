@@ -1,0 +1,531 @@
+\documentclass[a4paper, 12pt]{scrartcl}
+
+\usepackage{xifthen}
+
+\newboolean{solution}
+\setboolean{solution}{true} % set to false to exclude solution
+\usepackage{comment}
+\specialcomment{solution}{\ \\ {\bfseries Solution: }}{}
+\ifthenelse{\boolean{solution}}{\excludecomment{solution}}{}
+
+\specialcomment{solution}{\ \\ {\bfseries Solution: }}{}
+\ifthenelse{\boolean{solution}}{}{\excludecomment{solution}}
+%-----------------------------------------------------------------------
+
+\usepackage{amsmath, amssymb}
+\usepackage{graphicx}
+\usepackage{natbib}
+\textwidth6.8in
+\textheight10.2in
+\topmargin0in
+\oddsidemargin-0.25in
+\evensidemargin-0.25in
+\headsep-0.25in
+\headheight0pt
+\tabcolsep0pt
+\parindent0pt
+\parskip10pt plus2pt minus1pt
+
+\pagestyle{empty}
+
+% Render code similarly to how JStatSoft does
+\newcommand{\code}[1]{%
+{\catcode`\%=12 \texttt{\detokenize{#1}}} \kern-1ex
+}
+% Additional JStatSoft-inspired bits
+\let\proglang=\textsf
+\newcommand{\pkg}[1]{{\fontseries{b}\selectfont #1}}
+
+\usepackage{enumitem}
+
+\usepackage{hyperref}
+
+\begin{document}
+
+<<echo = FALSE>>=
+knitr::opts_chunk$set(warning = FALSE,
+                      message = FALSE,
+                      fig.height = 4
+)
+@
+
+STA427 Statistical Methods for Infectious Disease Epidemiology \hfill Spring Semester 2021 \\
+\hrule
+\kern5pt
+{\bfseries
+Exercise sheet 4} \normalsize\textrm \\
+\emph{Prepare the below such that you are able to discuss it on Wednesday 24th March}\\
+\hrule
+
+\begin{enumerate}[label = {\bfseries Exercise \arabic*}, leftmargin = *, wide = \parindent, align = left]
+
+\item Back calculation\\[2mm]
+The nonparametric back-projection method is implemented in the function \code{backprojNP} in the \proglang{R} package
+\pkg{surveillance}.
+\begin{enumerate}
+\item Load the \proglang{R} package \pkg{surveillance} and read the documentation of the \code{backprojNP} function
+\item Run \code{example(backprojNP)} and ensure you understand the inputs and outputs at each step. Feel free to use the OLAT forum to discuss with each other.
+\end{enumerate}
+Based on a study of haemophiliacs, \href{https://www.jstor.org/stable/2532057}{Brookmeyer and Goedert (1989)} suggest the incubation time from exposure to HIV to onset of AIDS can be described by a Weibull distribution with survival function
+\begin{align*}
+S(t) = \exp\left(- 0.0021 \> \left(\frac{t}{4} \right)^{2.516}\right), \quad t\geq 0,
+\end{align*}
+<<echo = FALSE>>=
+load("data/aids.RData")
+@
+Using this expression, the probability mass function (PMF) of the incubation time distribution $D$ obtained by discretising the above and right-truncating it after 30, gives the \code{pmf} object:
+<<>>=
+#Weibull in Brookmeyer und Goedert (1989)
+F <- function(t) {
+  ifelse(t >= 0, 1 - exp( - 0.0021 * t ** 2.516), 0)
+}
+t_grid <- seq(- 1, 30 * 4, by = 1)
+pmf <- F(tail(t_grid / 4, n = - 1)) - F(head(t_grid / 4, n = - 1))
+pmf <- pmf / sum(pmf)
+@
+\begin{enumerate}
+\item Run \code{backprojNP} with this PMF to perform a back projection of the AIDS incidence with a smoothing of $k=4$ with the control option \code{eq3a.method = "C"}
+\begin{solution}
+We use the AIDS data provided and include some smoothing since HIV/AIDS is not a point-source outbreak (as the \emph{E.coli} example in the lecture with \code{k = 0}) but infectious
+<<>>=
+library(surveillance)
+bp <- backprojNP(aids.sts, incu.pmf = pmf,
+                 control = list(k = 4,
+                                verbose = FALSE,
+                                eps = 0.00001,
+                                iter.max = 1000,
+                                eq3a.method = "C"))
+@
+\end{solution}
+\item Plot the estimated $\lambda_t$'s as a function of time and interpret the result.
+\begin{solution}
+<<>>=
+plot(bp, xlab = "time (quarters)", ylab = "cases",
+     legend.opts = NULL, main = "",
+     xaxis.tickFreq = list("%Y" = atChange))
+legend(x = "topleft", c(expression(y[t]), expression(lambda[t])),
+       lty = c(1, 2), col = c(1, 4), bty = "n")
+@
+Recall the goal of back-proejction is to infer the time of infection from time of symptom onset and use this information to reconstruct the infection curve; deduce $\lambda_t$ given observed cases $y_t$. We see that the peak of $\lambda_t$ is earlier than the peak of $y_t$ (as expected) but also that $\lambda_t$ seems to be narrower than $y_t$. NB additional context: from 1996 the use of antiretroviral therapy changed the incubation time which is why we are only analysing data until 2015.
+\end{solution}
+\item Use the estimated $\lambda_t$'s to obtain an estimate of $\mu_t$ for $t=1, \ldots, \Sexpr{nrow(aids.sts)}$. Create a plot containing $\lambda_t$, the observed number of AIDS patients $y_t$ (available via \code{aids$observed}, and $\mu_t$ as a function of time $t$.
+\begin{solution}
+Recall from the lecture that $\mu_t$ is the mean in $Y_t \sim \operatorname{Po}(\mu_t)$. We calculate \begin{equation*}
+\mu_t = \sum_{i = 1}^ t f(t - i) \lambda_i
+\end{equation*}
+where $f$ is the PMF
+<<>>=
+#Create wrapper functions for the PMF and CDF based on the vector
+#This safeguards queries outside the support of the pmf.
+dincu <- function(x) {
+  notInSupport <- x < 0 | x >= length(pmf)
+  #Give index -1 to invalid queries
+  x[notInSupport] <- -1
+  return(c(0, pmf)[x + 2])
+}
+
+#Extra estimated lambdas
+lambda <- as.numeric(upperbound(aids.sts))
+
+#Do convolution to obtain mu
+mu <- 0 * lambda
+for (t in 1 : length(mu)) {
+  delay <- 0 : (t - 1)
+  mu[t] <- sum(lambda[t - delay] * dincu(delay))
+}
+
+plot(aids.sts, legend.opts = NULL, lwd = c(1, 1, 3),
+     lty = c(1, 1, 1), ylab = "cases",
+     dx.upperbound = 0, main = "",
+     xaxis.tickFreq = list("%Y" = atChange))
+lines(1 : length(mu), mu, col = 2, lwd = 2)
+legend(x = "topleft", c(expression(y[t]), expression(lambda[t]),
+                        expression(mu[t])),
+       lty = c(1, 1, 1), col = c(1, 4, 2),
+       lwd = c(1, 2, 2), bty = "n")
+@
+It fits well to the observed data
+\end{solution}
+\item What assumptions are required to compute future values $\mu_t$ for $t = \Sexpr{paste(seq(nrow(aids.sts) + 1, nrow(aids.sts) + 4, by = 1), collapse = ",")}$?
+\begin{solution}
+We need to assume that
+\begin{itemize}
+\item the incubation distribution is the same as before
+\item$\lambda_{\Sexpr{nrow(aids.sts) + 1}} = \ldots = \lambda_{\Sexpr{nrow(aids.sts) + 4}} = 0$ i.e. after 1995:IV no new cases occur
+\end{itemize}
+Neither of these assumptions are realistic given what we know (see earlier contextual comment)
+\end{solution}
+\end{enumerate}
+\item Nowcasting\\[2mm]
+\begin{enumerate}
+\item With the data available \href{https://github.com/gstephan30/nowcasting_COVID19/blob/master/data/line_list_nowcast.csv}{here}, use the script provided on OLAT (\code{script.R}) to examine what happens when the moving window width is changed? Try both increasing and decreasing it. What happens when you remove that option from the nowcast controls?\\~
+\emph{Hint:} Reading the help file for \pkg{surveillance}::\code{nowcast} may help
+\begin{solution}
+The default output is
+<<echo = FALSE>>=
+# Script uses supporting information to
+# 'Now-casting the COVID-19 epidemic: The use case of Japan, March 2020'
+# Code authors Stephan Glöckner, Gérard Krause, Michael Höhle
+
+library(dplyr)
+library(lubridate)
+library(tidyr)
+library(purrr)
+library(stringr)
+library(ggplot2)
+library(janitor)
+library(surveillance)
+library(broom)
+
+file_name <- "data/line_list_nowcast.csv"
+df <- vroom::vroom(file_name) %>% 
+  mutate_at(vars(contains("date")), dmy) %>% 
+  mutate(source = "Corona Working Group") %>% 
+  mutate(date_confirmation = case_when(
+    date_confirmation == ymd("2020-03-20") ~ ymd("2020-03-02"),
+    TRUE ~ date_confirmation)
+  )
+
+#Control variables of the nowcast - only do nowcasts for the last max_delay days
+now <- max(df$date_confirmation) 
+max_delay <- 14
+safePredictLag <- 0
+#so_range <- range(df$date_onset_symptoms, na.rm = TRUE)
+so_range <- c(min(df$date_onset_symptoms, na.rm = TRUE), now)
+#nowcastDates <- seq(from = so_range[1], to = now - safePredictLag, by = 1)
+#Fix nowcast time points so they don't depend on the imputed data.
+nowcastDates <- seq(from = now - safePredictLag - max_delay,
+                    to = now - safePredictLag, by = 1)
+
+sts <- linelist2sts(
+  as.data.frame(df),
+  dateCol = "date_onset_symptoms",
+  aggregate.by = "1 day", 
+  dRange = so_range)
+
+nc.control <- list(
+  N.tInf.max = 4e3,
+  N.tInf.prior = structure("poisgamma",
+                           mean.lambda = mean(observed(sts)),
+                           var.lambda = 5 * var(observed(sts))
+  ),
+  ##compute predictive distribution as well, which is needed for some of the
+  ##animations.
+  predPMF = TRUE,
+  dRange = so_range)
+
+nc <- nowcast(now = now, when = nowcastDates, data = as.data.frame(df),
+              dEventCol = "date_onset_symptoms",
+              dReportCol = "date_confirmation",
+              aggregate.by = "1 day",
+              D = 14, # adjust cases up to 2 weeks back.
+              # # Assume constant delay distribution, but only within the last m=14 days
+              method = "bayes.trunc",
+              m = 14, #only use last 14 days for the delay estimation
+              control = nc.control
+)
+
+save <- nc
+
+##Convert to tibble (in wide format)
+nc_tidy <- nc %>% 
+  as_tibble() %>% 
+  # Add prediction interval
+  mutate(pi_lower = nc@pi[,,1],  pi_upper=  nc@pi[,,2]) %>% 
+  # Return only time points which were nowcasted.
+  filter(epoch %in% nowcastDates) %>% 
+  # Restrict to relevant columns
+  select(date = epoch,
+         observed,
+         predicted = upperbound,
+         predicted_lower= pi_lower,
+         predicted_upper = pi_upper ) %>% 
+  # Reduce nowcast objects to only showing results during last 2 weeks
+  # A consequence of using D=14 is that older delays than 14 days are not 
+  # adjusted at all.
+  filter(date > (max(date) - weeks(2))) %>% 
+  mutate(obnyr = predicted - observed)
+nc_df <- nc_tidy
+nc_tidy <- nc_tidy %>% 
+  select(date, observed, obnyr) %>% 
+  gather(key, value, - date) %>% 
+  ungroup()
+
+# last case of linelist to filter nowcast data
+last_linelist_case <- df %>% 
+  summarise(n = n(),
+            last_case = max(date_confirmation)) %>% 
+  pull(last_case)
+
+# Plot nowcasts with corresponding prediction intervals
+nc_tidy %>% 
+  mutate(key = case_when(key == "obnyr" ~ "nowcast",
+                         TRUE ~ key)) %>%
+  filter(date <= ymd(last_linelist_case)) %>%
+  ggplot(aes(date, value)) +
+  geom_col(aes(fill = key), alpha = 0.9)  +
+  geom_errorbar(
+    data = (nc_df %>%
+              mutate(value = 1, key = NA) %>%
+              filter(date > (max(date) - weeks(2)))), 
+    aes(ymin = predicted_lower, ymax = predicted_upper),
+    width = 0.2, size = 1) +
+  scale_fill_manual(values = c("#ff7f00", "#377eb8")) +
+  scale_y_continuous(labels = scales::number_format(accuracy = 1)) +
+  scale_x_date(date_breaks = "4 days", date_labels = "%b %d") +
+  labs(x = "",
+       y = "Daily incidence") +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1))
+@
+We double the moving window as well as remove it. These options (\code{m = 28} and \code{m = NULL}, respectively) to  the largest possible option in the \code{nowcast} call yields no change in the plots but different numbers of cases within the windows are seen in the output
+<<>>=
+nc <- nowcast(now = now, when = nowcastDates, data = as.data.frame(df),
+              dEventCol = "date_onset_symptoms",
+              dReportCol = "date_confirmation",
+              aggregate.by = "1 day",
+              D = 14, # adjust cases up to 2 weeks back.
+              # # Assume constant delay distribution, but only within the last m=14 days
+              method = "bayes.trunc",
+              m = NULL,
+              control = nc.control
+)
+@
+<<echo = FALSE>>=
+nc_tidy <- nc %>%
+  as_tibble() %>%
+  # Add prediction interval
+  mutate(pi_lower = nc@pi[,,1],  pi_upper = nc@pi[,,2]) %>% 
+  # Return only time points which were nowcasted.
+  filter(epoch %in% nowcastDates) %>% 
+  # Restrict to relevant columns
+  select(date = epoch,
+         observed,
+         predicted = upperbound,
+         predicted_lower= pi_lower,
+         predicted_upper = pi_upper) %>% 
+  # Reduce nowcast objects to only showing results during last 2 weeks
+  # A consequence of using D=14 is that older delays than 14 days are not 
+  # adjusted at all.
+  filter(date > (max(date) - weeks(2))) %>% 
+  mutate(obnyr = predicted - observed)
+nc_df <- nc_tidy
+nc_tidy <- nc_tidy %>% 
+  select(date, observed, obnyr) %>% 
+  gather(key, value, - date) %>% 
+  ungroup()
+
+# last case of linelist to filter nowcast data
+last_linelist_case <- df %>% 
+  summarise(n = n(),
+            last_case = max(date_confirmation)) %>% 
+  pull(last_case)
+
+# Plot nowcasts with corresponding prediction intervals
+p1 <- nc_tidy %>% 
+  mutate(key = case_when(key == "obnyr" ~ "nowcast",
+                         TRUE ~ key)) %>% 
+  filter(date <= ymd(last_linelist_case)) %>% 
+  
+  ggplot(aes(date, value)) +
+  geom_col(aes(fill = key), alpha = 0.9)  +
+  geom_errorbar(
+    data = (nc_df %>%
+              mutate(value = 1, key = NA) %>%
+              filter(date > (max(date) - weeks(2)))), 
+    aes(ymin = predicted_lower, ymax = predicted_upper),
+    width = 0.2, size = 1) +
+  scale_fill_manual(values = c("#ff7f00", "#377eb8")) +
+  scale_y_continuous(labels = scales::number_format(accuracy = 1)) +
+  scale_x_date(date_breaks = "4 days", date_labels = "%b %d") +
+  labs(x = "",
+       y = "Daily incidence") +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1))
+
+nc <- nowcast(now = now, when = nowcastDates, data = as.data.frame(df),
+              dEventCol = "date_onset_symptoms",
+              dReportCol = "date_confirmation",
+              aggregate.by = "1 day",
+              D = 14, # adjust cases up to 2 weeks back.
+              method = "bayes.trunc",
+              m = 28,
+              control = nc.control
+)
+
+nc_tidy <- nc %>% 
+  as_tibble() %>% 
+  # Add prediction interval
+  mutate(pi_lower = nc@pi[,,1],  pi_upper=  nc@pi[,,2]) %>% 
+  # Return only time points which were nowcasted.
+  filter(epoch %in% nowcastDates) %>% 
+  # Restrict to relevant columns
+  select(date = epoch,
+         observed,
+         predicted = upperbound,
+         predicted_lower= pi_lower,
+         predicted_upper = pi_upper ) %>% 
+  # Reduce nowcast objects to only showing results during last 2 weeks
+  # A consequence of using D=14 is that older delays than 14 days are not 
+  # adjusted at all.
+  filter(date > (max(date) - weeks(2))) %>% 
+  mutate(obnyr = predicted - observed)
+nc_df <- nc_tidy
+nc_tidy <- nc_tidy %>% 
+  select(date, observed, obnyr) %>% 
+  gather(key, value, - date) %>% 
+  ungroup()
+
+# last case of linelist to filter nowcast data
+last_linelist_case <- df %>% 
+  summarise(n = n(),
+            last_case = max(date_confirmation)) %>% 
+  pull(last_case)
+
+# Plot nowcasts with corresponding prediction intervals
+p2 <- nc_tidy %>% 
+  mutate(key = case_when(key == "obnyr" ~ "nowcast",
+                         TRUE ~ key)) %>% 
+  filter(date <= ymd(last_linelist_case)) %>% 
+  
+  ggplot(aes(date, value)) +
+  geom_col(aes(fill = key), alpha = 0.9)  +
+  geom_errorbar(
+    data = (nc_df %>%
+              mutate(value = 1, key = NA) %>%
+              filter(date > (max(date) - weeks(2)))), 
+    aes(ymin = predicted_lower, ymax = predicted_upper),
+    width = 0.2, size = 1) +
+  scale_fill_manual(values = c("#ff7f00", "#377eb8")) +
+  scale_y_continuous(labels = scales::number_format(accuracy = 1)) +
+  scale_x_date(date_breaks = "4 days", date_labels = "%b %d") +
+  labs(x = "",
+       y = "Daily incidence") +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1))
+@
+<<>>=
+# Save plot as object
+p2 <- nc_tidy %>% 
+  mutate(key = case_when(key == "obnyr" ~ "nowcast",
+                         TRUE ~ key)) %>% 
+  filter(date <= ymd(last_linelist_case)) %>% 
+  
+  ggplot(aes(date, value)) +
+  geom_col(aes(fill = key), alpha = 0.9)  +
+  geom_errorbar(
+    data = (nc_df %>%
+              mutate(value = 1, key = NA) %>%
+              filter(date > (max(date) - weeks(2)))), 
+    aes(ymin = predicted_lower, ymax = predicted_upper),
+    width = 0.2, size = 1) +
+  scale_fill_manual(values = c("#ff7f00", "#377eb8")) +
+  scale_y_continuous(labels = scales::number_format(accuracy = 1)) +
+  scale_x_date(date_breaks = "4 days", date_labels = "%b %d") +
+  labs(x = "",
+       y = "Daily incidence") +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1))
+
+library(patchwork)
+p1 + p2
+@
+\end{solution}
+\item Use the \code{glm} function to generate a nowcast for the time points between for the Japan data from the previous question and plot your nowcast\\
+\emph{Hint:} follow the code from the lecture slides
+\begin{solution}
+<<echo = FALSE>>=
+nc <- save
+@
+<<>>=
+# From the help function - extract the reporting triangle
+nc <- nowcast(now = now, when = nowcastDates, data = as.data.frame(df),
+              dEventCol = "date_onset_symptoms",
+              dReportCol = "date_confirmation",
+              aggregate.by = "1 day",
+              D = 14, # adjust cases up to 2 weeks back.
+              # # Assume constant delay distribution, but only within the last m=14 days
+              method = "unif")
+zeger <- nc@reportingTriangle
+idx <- seq(which(attr(zeger, "t02s") == min(nowcastDates)), nrow(zeger))
+zeger <- zeger[idx, ]
+
+matrix2df <- function(zeger){
+  data.frame(n = as.numeric(as.matrix(zeger)),
+             t = as.numeric(as.matrix(row(zeger) - 1)),
+             d = as.numeric(as.matrix(col(zeger) - 1)))
+}
+
+#Convert to data.frame
+zeger_df <- matrix2df(zeger)
+#Fit log-linear model.
+m <- glm(n ~ as.factor(t) + as.factor(d),
+         data = zeger_df, subset = !is.na(n),
+         family = poisson)
+
+#Prediction m_{t,d} for ALL cells in the contingency table
+mu_mle <- predict(m, newdata = zeger_df, type = "response")
+
+NtInf <- function(data){
+    as.numeric(with(data, tapply(n, t, sum, na.rm = TRUE)))
+}
+
+#Function to generate new data by parametric bootstrap
+rntd <- function(data, mle){
+    #Indicator vector of what is observed
+    observed <- !is.na(data$n)
+    #Extra data copies (one to estimate, one to predict)
+    data_estimate <- data_predict <- data
+
+    #Make a new data matrix with observed values replaced
+    data_estimate$n[observed] <- rpois(n = nrow(data),
+                                       lambda = mle)[observed]
+
+    #Fit Poisson GLM to the data to obtain estimates
+    m_star <- glm(n ~ as.factor(t) + as.factor(d),
+                  data = data_estimate, subset = !is.na(n),
+                  family = poisson)
+
+    #Add sampled values where missing
+    data_predict$n[!observed] <- rpois(n = nrow(data),
+                                       predict(m_star, newdata = data,
+                                               type = "response"))[!observed]
+    #Done - return new data.frame
+    return(data_predict)
+}
+
+set.seed(20210324)
+b <- boot::boot(zeger_df, statistic = NtInf,
+                sim = "parametric", R = 999,
+                ran.gen = rntd, mle = mu_mle)
+
+#Simple percentile intervals
+predIntervals <- apply(rbind(b$t0, b$t), 2,
+                       quantile, prob = c(0.025, 0.975))
+
+
+## -----------------------------------------------------------------------------
+#Perform nowcasting only based on the mean
+zeger_df2 <- zeger_df
+zeger_df2$n[is.na(zeger_df2$n)] <- mu_mle[is.na(zeger_df2$n)]
+
+plot(1 : nrow(zeger), b$t0, type = "l",
+     ylab = "cases", ylim = c(0, max(predIntervals)),
+     axes = FALSE, xlab = "", lwd = 2, col = "steelblue")
+axis(2, las = 1)
+axis(1, at = 1 : nrow(zeger),
+     label = rownames(zeger), las = 2)
+box()
+lines(1 : nrow(zeger), NtInf(zeger_df2),
+      col = "magenta", lwd = 2)
+matlines(1 : nrow(zeger), t(predIntervals),
+         lty = 2, col = "magenta", lwd = 1)
+legend(x = "topleft", c("observed", "delay adjusted"),
+       lty = c(1, 1), col = c("steelblue", "magenta"),
+       lwd = 3, bty = "n")
+@
+We see a similar pattern to that found in the nowcast from the first exercise.
+\end{solution}
+\end{enumerate}
+\end{enumerate}
+\end{document}

@@ -1,0 +1,232 @@
+\documentclass[a4paper, 12pt]{scrartcl}
+
+\usepackage{xifthen}
+
+\newboolean{solution}
+\setboolean{solution}{true} % set to false to exclude solution
+\usepackage{comment}
+\specialcomment{solution}{\ \\ {\bfseries Solution: }}{}
+\ifthenelse{\boolean{solution}}{\excludecomment{solution}}{}
+
+\specialcomment{solution}{\ \\ {\bfseries Solution: }}{}
+\ifthenelse{\boolean{solution}}{}{\excludecomment{solution}}
+%-----------------------------------------------------------------------
+
+\usepackage{amsmath, amssymb}
+\usepackage{graphicx}
+\usepackage{natbib}
+\textwidth6.8in
+\textheight10.2in
+\topmargin0in
+\oddsidemargin-0.25in
+\evensidemargin-0.25in
+\headsep-0.25in
+\headheight0pt
+\tabcolsep0pt
+\parindent0pt
+\parskip10pt plus2pt minus1pt
+
+\pagestyle{empty}
+
+% Render code similarly to how JStatSoft does
+\newcommand{\code}[1]{%
+{\catcode`\%=12 \texttt{\detokenize{#1}}} \kern-1ex
+}
+% Additional JStatSoft-inspired bits
+\let\proglang=\textsf
+\newcommand{\pkg}[1]{{\fontseries{b}\selectfont #1}}
+
+\usepackage{enumitem}
+
+\usepackage{hyperref}
+
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning}
+
+% Source: https://github.com/mariabnd/miscellaneous/blob/master/LaTeX/commonly_used.tex
+\newcommand*{\dd}{\ensuremath{\operatorname{d}\!}} % Fulfils ISO 80000-2 (preceeded by ISO 31-11)
+
+\usepackage{xcolor}
+\newcommand{\todo}[1]{{\bfseries \color{red} #1}}
+\newcommand{\ignore}[1]{}
+
+\begin{document}
+<<echo = FALSE>>=
+par(las = 1)
+@
+
+STA427 Statistical Methods for Infectious Disease Epidemiology \hfill Spring Semester 2021 \\
+\hrule
+\kern5pt
+{\bfseries
+Exercise sheet 5} \normalsize\textrm \\
+\emph{Prepare the below such that you are able to discuss it on Wednesday 31st March}\\
+\hrule
+
+\begin{enumerate}[label = {\bfseries Exercise \arabic*}, leftmargin = *, wide = \parindent, align = left]
+\item Interrupted time series analysis\\[2mm]
+A simple method of determining whether an intervention is useful is to examine cases observed before and after the introduction of the intervention and see whether the two periods are different, specifically whether there is a drop in infectious disease cases after introduction of the measure. This kind of approach is known as interrupted time series analysis or change-point analysis. In Germany, vaccines for rotavirus were made available in the mid 2000s and included in the national immunisation schedule in 2013. We want to know what effect a rotavirus infection vaccine might have had on case numbers. For this, we analyse SurvStat@RKI data which provide us with the reported number of laboratory confirmed cases for each week since rotavirus became a notifiable disease in Germany in 2001.
+\begin{enumerate}
+\item Load the data set \code{rota} from OLAT and plot the data for the period before 2006 (pre) and after 2013 (post). Use \code{ISOweek2date} from the \pkg{ISOweek} package to adjust the case notification dates. What does the trend look like for the two periods?\\~{\itshape Hint:} You may wish to remove 2020 and 2021 data to avoid COVID-19 effects (social distancing and stay at home measures) and incomplete year of reporting, respectively.
+\begin{solution}
+<<fig.height = 5>>=
+load("data/rota.rdata")
+library(lubridate)
+rota$Notification <- ISOweek::ISOweek2date(gsub("w", "W",
+                                                paste0(rota$Notification, "-1")))
+covid <- rota[rota$Year >= 2020, ]
+rota <- rota[isoyear(rota$Notification) < 2020, ]
+rota[!(isoyear(rota$Notification) < 2006 | 
+               isoyear(rota$Notification) > 2013), ]$Cases <- NA
+rota$Vax <- isoyear(rota$Notification) > 2013
+
+with(rota, plot(Notification, Cases, type = "l",
+                ylim = c(0, max(rota$Cases, na.rm = TRUE)),
+                xlim = range(rota$Notification, na.rm = TRUE),
+                xlab = "Year and week"))
+@
+There may be slightly fewer cases in the post period but it is hard to determine from visual inspection alone. We see seasonality in the data with most cases expected around this time of year/in the spring. We see fewer cases in the post period (the peak is smaller) and they seem to be occuring slightly later in the year.
+<<fig.height = 4>>=
+par(mfrow = c(1, 2))
+with(rota[isoyear(rota$Notification) < 2006, ],
+     plot(Week, Cases, col = Year, main = "Pre",
+          ylim = c(0, max(rota$Cases, na.rm = TRUE))))
+legend("topright", legend = unique(rota[isoyear(rota$Notification) < 2006, ]$Year),
+       col = 1 : length(unique(rota[isoyear(rota$Notification) < 2006, ]$Year)),
+       pch = 1)
+with(rota[isoyear(rota$Notification) > 2013, ],
+     plot(Week, Cases, col = Year, main = "Post",
+          ylim = c(0, max(rota$Cases, na.rm = TRUE))))
+legend("topright", legend = unique(rota[isoyear(rota$Notification) > 2013, ]$Year),
+       col = 1 : length(unique(rota[isoyear(rota$Notification) > 2013, ]$Year)),
+       pch = 1)
+@
+\end{solution}
+\item Fit a simple GLM model with Poisson link to the observed number of cases both periods and comment on your findings.
+\begin{solution}
+<<fig.height = 5>>=
+m <- glm(Cases ~ Notification * Vax, data = rota, family = poisson,
+         na.action = na.exclude)
+
+idx <- which(is.na(rota$Cases))
+plot(rota$Notification,
+     # pad with NAs to obtain same length
+     c(m$fitted.values[1 : idx[1] - 1], rep(NA, length(idx)),
+       m$fitted.values[idx[1] : length(m$fitted.values)]),
+     xlim = range(rota$Notification),
+     type = "l", ylim = c(0, max(m$fitted.values)), ylab = "Cases",
+     xlab = "Year")
+@
+The slope seems to be different in the pre and post intervention periods. We determine this both visually (the curves look different) but also based on estimated model parameters. The test below also shows a difference between the two models (with and without interaction with \code{Vax}, the variable determining when the vaccination has been introduced):
+<<>>=
+summary(m)
+
+m2 <- glm(Cases ~ Notification, data = rota, family = poisson)
+anova(m, m2, test = "Chisq")
+@
+\end{solution}
+\item What might be a drawback of such an approach?
+\begin{solution}
+We have to be somewhat certain that the intervention(s) of interest are not confounded with other things occuring simultaneously to be able to conclude the difference in slopes is due to the intervention. For example, a lot of measures were used in malaria elimination efforts in the early 20th century so it would be difficult to disentangle the effects of any of them:
+\begin{center}
+\includegraphics[scale = 0.5]{Screenshot from 2021-03-21 15-31-38.png}\\~
+\end{center}
+Image source: Principles of Epidemiology in Public Health Practice (USCDC) Lesson 5 section 5 (\url{https://www.cdc.gov/csels/dsepd/ss1978/lesson5/section5.html})\\~
+This is why it was suggested you remove cases after 2019, as they seem to be effected by ongoing public health interventions seeking to control COVID-19 (and not anything else specific to rotavirus as far as we are aware)
+<<>>=
+range(covid$Cases)
+range(rota$Cases, na.rm = TRUE)
+@
+Additionally, there is an increase in cases before the interruption which is due to artefacts that are not immunisation-related (see \href{the article by Stocks et al.}{https://doi.org/10.1093/biostatistics/kxy057} for details). There might also have been changes in population following increased migration from 2015. A change in the birthrate would have an effect on cases, e.g. if birthrates go down, the number of children will decrease, and so also will cases.
+\end{solution}
+\end{enumerate}
+\item Pertussis \\[2mm]
+The file \code{whoopingCough} available on OLAT contains data on pertussis in the UK collected over two periods, one just prior to the start (``non-epidemic'') and one at the first peak of the pertussis epidemic (``epidemic'') of 1989--1990. The following information is available: reporting period (\verb+period+), 1-year age groups (\verb+age+), total number of notified cases (\verb+cases+), number of vaccinated cases (\verb+vaccinated+), vaccination coverage figures for the relevant birth cohorts as a proxy for the proportions of vaccinated 1--9 year olds in the population (\verb+coverage+).
+\begin{enumerate}
+\item Compute the vaccine effectiveness for each age-group and period. Create a plot for each period where vaccine effectiveness is shown as a function of age.
+\begin{solution}
+<<fig.height=4>>=
+whoopingCough <- read.table("data/whoopingCough.txt", header = TRUE, sep = ",")
+whoopingCough <- within(whoopingCough, {
+        # proportion of the population vaccinated
+        ppv <- coverage / 100
+        # proportion of the cases vaccinated
+        pcv <- vaccinated / cases
+        # vaccine effectiveness
+        ve <- 1 - pcv / (1 - pcv) * (1 - ppv) / ppv
+        # offset for screening method
+        o <- qlogis(ppv)
+})
+library(lattice)
+(xyplot(ve ~ age | period, data = whoopingCough))
+@
+\end{solution}
+\item Fit a suitable binomial GLM to the data with a two-level factor for the study period and a nine-level factor for age as main effects. Use Pearson's $\chi^2$ statistic to estimate overdispersion $\phi$ for this model.
+\begin{solution}
+We consider additive effects in this model
+<<>>=
+m <- glm(cbind(vaccinated, cases - vaccinated) ~ offset(o) + period +
+                 as.factor(age), family = binomial, data = whoopingCough)
+summary(m)
+@
+The estimate of the overdispersion $\hat{\phi}$ is
+<<>>=
+(phi <- sum(residuals(m, type = "pearson") ^ 2) / m$df.residual)
+@
+\end{solution}
+\item Are the effects of \verb+period+ and the factor \verb+age+ as a whole significant at the $\alpha=0.05$ level after adjusting for overdispersion?
+\begin{solution}
+Age is no longer significant (and period is borderline)
+<<>>=
+anova(m, test = "Chisq", dispersion = phi)
+@
+\end{solution}
+\item Compute the estimated period- and age-specific vaccine effectiveness from your GLM model. Plot the resulting $\log(1-\text{VE})$ against age for each study period. What do you see?
+\end{enumerate}
+\begin{solution}
+<<fig.height=4>>=
+VE <- 1 - exp(predict(m) - whoopingCough$o)
+(xyplot(log(1 - VE) ~ age | period, data = whoopingCough))
+@
+The patterns are more similar than in question a).
+\end{solution}
+
+\ignore{\item SIR model with vaccination (optional)\\[2mm]
+Recall the SIR compartmental model seen in earlier exercises given by the differential equations
+\begin{align*}
+\frac{\dd S(t)}{\dd t} &= - \beta S(t) I (t) \\
+\frac{\dd I(t)}{\dd t} &= \beta S(t) I (t) - \gamma I(t)\\
+\frac{\dd R(t)}{\dd t} &= \gamma I (t)
+\end{align*}
+with $\beta, \gamma > 0$. 
+In the lecture it was noted that an additional compartment for vaccination can be included. Here we showcase another way of including vaccination in such a model.
+\begin{enumerate}
+\item Incorporate a vaccination program in the basic model by adding a transition from S to R assuming a proportion $p$ is vaccinated. How does this affect things?
+\begin{solution}
+We now need to include a flow of $p$ from S to R
+\begin{center}
+\begin{tikzpicture}[node distance = 1cm, auto,
+>=Latex, 
+every node/.append style = {align = center},
+int/.style = {draw, minimum size = 1cm}]
+\node [int] (S)             {$S$};
+\node [int, right = of S] (I) {$I$};
+\node [int, right = of I] (R) {$R$};
+\path[->] (S) edge node {$\beta I$} (I)
+(I) edge node {$\gamma$} (R);
+\draw[->] (S.north) -- +(0, 1) -| node[above left] {$p$} (R);
+\end{tikzpicture}
+\end{center}
+so the model becomes
+\begin{align*}
+\frac{\dd S(t)}{\dd t} &= (1 - p) - \beta S(t) I (t) \\
+\frac{\dd I(t)}{\dd t} &= \beta S(t) I (t) - \gamma I(t)\\
+\frac{\dd R(t)}{\dd t} &= p + \gamma I (t)
+\end{align*}
+\todo{Add code from exercise sheet 1 adjusted to include this and some plots showing the effect of $p$}
+\end{solution}
+\item Showcase your new model with $p = 40\%$ and $p = 80\%$. How does this compare with previously? What happens to the number of susceptibles and the number of infected?
+\end{enumerate}
+{\itshape Hint:} Earlier exercises may provide a good starting point}
+\end{enumerate}
+\end{document}
