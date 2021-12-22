@@ -8,7 +8,7 @@ The ongoing COVID-19 pandemic reminds us that infectious diseases remain a conti
 * [Introduction to epidemic modelling](https://github.com/hoehleatsu/STA427_SM4IDE/blob/main/Lectures/Lecture01/lecture01-handout.pdf)
      -   Compartmental models Deterministic and stochastic SIR-type models
      -   Simulation and inference for SIR-type models
-* [Estimation in compartment models](https://github.com/hoehleatsu/STA427_SM4IDE/blob/main/Lectures/Lecture02/lecture02-handout.pdf)
+* [Estimation in compartmental models](https://github.com/hoehleatsu/STA427_SM4IDE/blob/main/Lectures/Lecture02/lecture02-handout.pdf)
 * [Reproduction numbers and their estimation](https://github.com/hoehleatsu/STA427_SM4IDE/blob/main/Lectures/Lecture03/lecture03-handout.pdf)
      -   Incubation period, serial interval, generation time and their estimation
 * [Latencies and Delays](https://github.com/hoehleatsu/STA427_SM4IDE/blob/main/Lectures/Lecture04/lecture04-handout.pdf)
